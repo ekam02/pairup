@@ -1,0 +1,12 @@
+pandas~=2.2.3
+cx_Oracle~=8.3.0
+python-dotenv~=0.21.0
+openpyxl~=3.1.5
+pytest
+pywin32
+sqlalchemy~=2.0.35
+psycopg2-binary~=2.9.10
+tomli >= 1.1.0 ; python_version < "3.11"
+pyxlsb~=1.0.10
+ipywidgets
+pydantic~=2.11.1

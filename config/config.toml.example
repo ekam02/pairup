@@ -1,0 +1,9 @@
+# Configuración base del proyecto
+OUTPUT_DIR = 'output'
+REPORT_NAME = 'conciliation'
+STORES = [19]
+
+# Peridio principal de ejecución
+[DATETIME]
+START_DATE = '1990-01-01'
+END_DATE = '1990-12-31'

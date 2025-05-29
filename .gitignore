@@ -2,6 +2,7 @@
 temp/
 tmp/
 output/
+*.toml
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,dotenv,jupyternotebooks,venv,virtualenv,data,database,microsoftoffice,visualstudiocode,sublimetext,pycharm+all,jetbrains+all,visualstudio,git,linux,macos,windows
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,dotenv,jupyternotebooks,venv,virtualenv,data,database,microsoftoffice,visualstudiocode,sublimetext,pycharm+all,jetbrains+all,visualstudio,git,linux,macos,windows

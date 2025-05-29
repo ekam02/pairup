@@ -7,8 +7,7 @@ from sqlalchemy import create_engine
 import pandas as pd
 from pandas.errors import MergeError
 
-
-from config import fact_engine
+from config.settings import fact_engine
 from models import PAIR_EDOC_FCT_SQL, PAIR_SPTD_FCT_SQL
 
 

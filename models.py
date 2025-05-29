@@ -170,7 +170,7 @@ SELECT DISTINCT
     ef.encfactura_col_id::VARCHAR id_fct,
     ef.c_origen::VARCHAR,
     SUBSTRING(ef.num_doc_fact_elec, 1, 4) prefijo_fct,
-    SUBSTRING(ef.num_doc_fact_elec, 4) consecutivo_fct,
+    SUBSTRING(ef.num_doc_fact_elec, 5) consecutivo_fct,
     ef.num_doc_fact_elec factura_fct,
     ef.nro_factura_afec,
     es.line_jano::VARCHAR line_fct,
@@ -364,7 +364,20 @@ SELECT
     TO_CHAR(tr.fcha_crre_fdc, 'YYYY-MM-DD') fecha_cierre,
     TO_CHAR(tr.fcha_incia_tra, 'YYYY-MM-DD') fecha_ini,
     TO_CHAR(tr.fcha_fnlza_tra, 'YYYY-MM-DD') fecha_fin,
-    TO_CHAR(vp.vlor_pgdo_vep) valor_jan,
+    TO_CHAR(
+        CASE
+            WHEN tr.id_neg = '2' AND (
+                SELECT COUNT(*)
+                FROM jano.vntas_dt_pos vdp
+                WHERE vdp.id_tra = tr.id_tra AND vdp.id_neg = tr.id_neg
+            ) > 0 THEN (
+                SELECT SUM(NVL(vdp.bse_iva_vdp, 0) + NVL(vdp.iva_vdp, 0))
+                FROM jano.vntas_dt_pos vdp
+                WHERE vdp.id_tra = tr.id_tra AND vdp.id_neg = tr.id_neg
+            )
+            ELSE vp.vlor_pgdo_vep
+        END
+    ) valor_jan,
     vp.id_clie cliente_jan,
     vp.tpo_id_clie tipo_identificacion,
     tr.id_cnal_vnta canal
@@ -559,7 +572,7 @@ SELECT DISTINCT
     ef.encfactura_col_id::VARCHAR id_fct,
     ef.c_origen::VARCHAR,
     SUBSTRING(ef.num_doc_fact_elec, 1, 4) prefijo_fct,
-    SUBSTRING(ef.num_doc_fact_elec, 4) consecutivo_fct,
+    SUBSTRING(ef.num_doc_fact_elec, 5) consecutivo_fct,
     ef.num_doc_fact_elec factura_fct,
     ef.nro_factura_afec,
     es.line_jano::VARCHAR line_fct,
@@ -727,7 +740,7 @@ SELECT DISTINCT
     ef.encfactura_col_id::VARCHAR id_fct,
     ef.c_origen::VARCHAR,
     SUBSTRING(ef.num_doc_fact_elec, 1, 4) prefijo_fct,
-    SUBSTRING(ef.num_doc_fact_elec, 4) consecutivo_fct,
+    SUBSTRING(ef.num_doc_fact_elec, 5) consecutivo_fct,
     ef.num_doc_fact_elec factura_fct,
     ef.nro_factura_afec,
     es.line_jano::VARCHAR line_fct,
@@ -907,7 +920,20 @@ SELECT
     TO_CHAR(tr.fcha_crre_fdc, 'YYYY-MM-DD') fecha_cierre,
     TO_CHAR(tr.fcha_incia_tra, 'YYYY-MM-DD') fecha_ini,
     TO_CHAR(tr.fcha_fnlza_tra, 'YYYY-MM-DD') fecha_fin,
-    TO_CHAR(vp.vlor_pgdo_vep) valor_jan,
+    TO_CHAR(
+        CASE
+            WHEN tr.id_neg = '2' AND (
+                SELECT COUNT(*)
+                FROM jano.vntas_dt_pos vdp
+                WHERE vdp.id_tra = tr.id_tra AND vdp.id_neg = tr.id_neg
+            ) > 0 THEN (
+                SELECT SUM(NVL(vdp.bse_iva_vdp, 0) + NVL(vdp.iva_vdp, 0))
+                FROM jano.vntas_dt_pos vdp
+                WHERE vdp.id_tra = tr.id_tra AND vdp.id_neg = tr.id_neg
+            )
+            ELSE vp.vlor_pgdo_vep
+        END
+    ) valor_jan,
     vp.id_clie cliente_jan,
     vp.tpo_id_clie tipo_identificacion,
     tr.id_cnal_vnta canal

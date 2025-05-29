@@ -1,6 +1,6 @@
 from typing import Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import date, datetime, timedelta
 import re
 
 from sqlalchemy import create_engine
@@ -8,8 +8,43 @@ import pandas as pd
 from pandas.errors import MergeError
 
 
-from config import engine_fct, calculate_date_range
+from config import fact_engine
 from models import PAIR_EDOC_FCT_SQL, PAIR_SPTD_FCT_SQL
+
+
+def calculate_date_range(central_date: date, days: int = 4) -> tuple[str, str]:
+    """
+    Calculate the start and end dates around a central date with specified days extension.
+
+    Args:
+        central_date (date): The central date around which to calculate the range
+        days (int): Number of days to extend in both directions (negative values will be
+                   converted to positive, floats will be truncated to integer)
+
+    Returns:
+        tuple[str, str]: Tuple with start and end dates in 'dd/mm/YYYY' format
+
+    Examples:
+        >>> from datetime import date
+        >>> calculate_date_range(date(2024, 8, 31), 4)
+        ('27/08/2024', '04/09/2024')
+
+        >>> calculate_date_range(date(2023, 3, 1), 2)
+        ('27/02/2023', '03/03/2023')
+
+        >>> calculate_date_range(date(2024, 2, 28), 1.9)
+        ('27/02/2024', '29/02/2024')
+
+        >>> calculate_date_range(date(2024, 5, 15), -3)
+        ('12/05/2024', '18/05/2024')
+    """
+    processed_days = abs(int(days))
+    start_date = central_date - timedelta(days=processed_days)
+    end_date = central_date + timedelta(days=processed_days)
+    return (
+        start_date.strftime('%Y-%m-%d'),
+        end_date.strftime('%Y-%m-%d')
+    )
 
 
 def row_empty() -> dict:
@@ -79,9 +114,6 @@ def differential_matching(df1: pd.DataFrame, df2: pd.DataFrame, pivot: str = 'pa
         inner_df = pd.merge(df1, df2, on=pivot, how='inner')  # df1 | df2
         df1 = df1[~df1[pivot].isin(inner_df[pivot])]          # df1 - inner_df
         df2 = df2[~df2[pivot].isin(inner_df[pivot])]          # df2 - inner_df
-        inner_df = inner_df.drop([pivot], axis=1)
-        df1 = df1.drop([pivot], axis=1)
-        df2 = df2.drop([pivot], axis=1)
         return inner_df, df1, df2
     except TypeError as e:
         pass
@@ -129,7 +161,7 @@ def find_pair_fct_row(_row) -> dict:
         'trx': _row['trx_jan'],
         'start_date': dates[0],
         'end_date': dates[1]
-    }), engine_fct)
+    }), fact_engine)
     if not _result.empty:
         _re.update(_result.iloc[0].to_dict())
     else:
@@ -140,7 +172,7 @@ def find_pair_fct_row(_row) -> dict:
             'trx': _row['trx_jan'],
             'start_date': dates[0],
             'end_date': dates[1]
-        }), engine_fct)
+        }), fact_engine)
         if not _result.empty:
             if _row['tipo_tr'] == 'F':
                 if not _result[(_result['c_origen'] == '5') & (_result['prefijo_fct'] == 'RASU')].empty:
@@ -159,7 +191,7 @@ def find_pair_fct_row(_row) -> dict:
                 'trx': _row['trx_jan'],
                 'start_date': dates[0],
                 'end_date': dates[1]
-            }), engine_fct)
+            }), fact_engine)
             if not _result.empty:
                 if _row['tipo_tr'] == 'F':
                     if not _result[(_result['c_origen'] == '5') & (_result['prefijo_fct'] == 'RASU')].empty:
@@ -178,7 +210,7 @@ def find_pair_fct_row(_row) -> dict:
                     'trx': _row['trx_jan'],
                     'start_date': dates[0],
                     'end_date': dates[1]
-                }), engine_fct)
+                }), fact_engine)
                 if not _result.empty:
                     if _row['tipo_tr'] == 'F':
                         if not _result[(_result['c_origen'] == '5') & (_result['prefijo_fct'] == 'RASU')].empty:

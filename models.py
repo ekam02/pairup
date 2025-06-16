@@ -394,7 +394,7 @@ FROM
 WHERE
     tr.fcha_crre_fdc BETWEEN TO_DATE('{start_date}', 'YYYY-MM-DD') AND TO_DATE('{end_date}', 'YYYY-MM-DD')
   AND es.id_fct IN ({stores}) -- NEW
-  AND tr.estdo_tra IN ('A', 'E')
+  AND tr.estdo_tra IN ('A', 'E', 'O')
   AND tr.id_neg IN (1, 2)
 UNION ALL
 SELECT
@@ -429,6 +429,7 @@ FROM
 WHERE
     tr.fcha_crre_fdc BETWEEN TO_DATE('{start_date}', 'YYYY-MM-DD') AND TO_DATE('{end_date}', 'YYYY-MM-DD')
   AND es.id_fct IN ({stores}) -- NEW
+  AND tr.estdo_tra IN ('A', 'E', 'O')
   AND dp.tpo_fctra_ddp IN ('F', 'P')
   AND tr.id_neg IN (1, 2)
   AND dp.prfjo_fctra_ddp NOT IN ('VCPM ')
@@ -949,7 +950,7 @@ FROM
         )
 WHERE
     tr.fcha_crre_fdc BETWEEN TO_DATE('{start_date}', 'YYYY-MM-DD') AND TO_DATE('{end_date}', 'YYYY-MM-DD')
-  AND tr.estdo_tra IN ('A', 'E')
+  AND tr.estdo_tra IN ('A', 'E', 'O')
   AND tr.id_neg IN (1, 2)
   AND es.id_fct = {store}
   AND tr.pos_tra = {pos}
@@ -1121,6 +1122,7 @@ FROM
 WHERE
     tr.fcha_crre_fdc BETWEEN TO_DATE('{start_date}', 'YYYY-MM-DD') AND TO_DATE('{end_date}', 'YYYY-MM-DD')
   AND dp.tpo_fctra_ddp IN ('F', 'P')
+  AND tr.estdo_tra IN ('A', 'E', 'O')
   AND tr.id_neg IN (1, 2)
   AND dp.prfjo_fctra_ddp NOT IN ('VCPM ')
   AND es.id_fct = {store}

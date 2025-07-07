@@ -423,7 +423,7 @@ FROM
             AND es.id_jano = tr.id_tie
         )
         INNER JOIN jano.dvlcnes_pos dp ON (
-        tr.id_tra = dp.id_tra
+            tr.id_tra = dp.id_tra
             AND tr.id_neg = dp.id_neg
         )
 WHERE

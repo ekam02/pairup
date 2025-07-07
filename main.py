@@ -5,7 +5,7 @@ import pandas as pd
 
 from config import biller_engine, jano_engine, OUTPUT_DIR, START_DATE, END_DATE, STORES, REPORT_NAME
 from models import QUERY_FCT, QUERY_JAN, PAIR_FT_JAN_SQL, PAIR_NT_JAN_SQL
-from utils import sql_executor, data_frame_slicer, identifier, row_empty, find_pair_fct_row, find_pair_jan_row, \
+from utils.finder import sql_executor, data_frame_slicer, identifier, row_empty, find_pair_fct_row, find_pair_jan_row, \
     dtype_to_str, differential_matching, calculate_date_range
 
 if __name__ == '__main__':

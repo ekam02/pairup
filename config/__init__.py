@@ -1,6 +1,8 @@
 from .settings import settings
 
 
+log_console_level = settings.log_console_level
+log_file_level = settings.log_file_level
 biller_engine = settings.biller_engine
 jano_engine = settings.jano_engine
 OUTPUT_DIR = settings.OUTPUT_DIR

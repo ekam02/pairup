@@ -28,26 +28,26 @@ class AppSettings:
     def _load_settings(self):
         init_oracle_client()
         if load_dotenv():
-            self.F_REP_USER = getenv('BILLER_USER')
-            self.F_REP_PASS = getenv('BILLER_PASS')
-            self.F_REP_HOST = getenv('BILLER_HOST')
-            self.F_REP_PORT = getenv('BILLER_PORT')
-            self.F_REP_NAME = getenv('BILLER_NAME')
-            self.F_REP_SCHE = getenv('BILLER_SCHE')
-            self.J_PRE_USER = getenv('JANO_USER')
-            self.J_PRE_PASS = getenv('JANO_PASS')
-            self.J_PRE_HOST = getenv('JANO_HOST')
-            self.J_PRE_PORT = getenv('JANO_PORT')
-            self.J_PRE_NAME = getenv('JANO_NAME')
+            biller_user = getenv('BILLER_USER')
+            biller_pass = getenv('BILLER_PASS')
+            biller_host = getenv('BILLER_HOST')
+            biller_port = getenv('BILLER_PORT')
+            biller_name = getenv('BILLER_NAME')
+            biller_sche = getenv('BILLER_SCHE')
+            jano_user = getenv('JANO_USER')
+            jano_pass = getenv('JANO_PASS')
+            jano_host = getenv('JANO_HOST')
+            jano_port = getenv('JANO_PORT')
+            jano_name = getenv('JANO_NAME')
             logger.debug('Environment variables loaded')
 
-            self.fact_engine = create_engine(
-                f'postgresql://{self.F_REP_USER}:{self.F_REP_PASS}@{self.F_REP_HOST}:{self.F_REP_PORT}/{self.F_REP_NAME}',
+            self.biller_engine = create_engine(
+                f'postgresql://{biller_user}:{biller_pass}@{biller_host}:{biller_port}/{biller_name}',
                 pool_size=5, max_overflow=10,
-                connect_args={'options': f'-csearch_path={self.F_REP_SCHE}'}
+                connect_args={'options': f'-csearch_path={biller_sche}'}
             )
             self.jano_engine = create_engine(
-                f'oracle+oracledb://{self.J_PRE_USER}:{self.J_PRE_PASS}@{self.J_PRE_HOST}:{self.J_PRE_PORT}/{self.J_PRE_NAME}',
+                f'oracle+oracledb://{jano_user}:{jano_pass}@{jano_host}:{jano_port}/{jano_name}',
                 pool_size=5, max_overflow=10
             )
             logger.debug('Engines created')

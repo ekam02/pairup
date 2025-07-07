@@ -28,17 +28,17 @@ class AppSettings:
     def _load_settings(self):
         init_oracle_client()
         if load_dotenv():
-            self.F_REP_USER = getenv('F_REP_USER')
-            self.F_REP_PASS = getenv('F_REP_PASS')
-            self.F_REP_HOST = getenv('F_REP_HOST')
-            self.F_REP_PORT = getenv('F_REP_PORT')
-            self.F_REP_NAME = getenv('F_REP_NAME')
-            self.F_REP_SCHE = getenv('F_REP_SCHE')
-            self.J_PRE_USER = getenv('J_PRE_USER')
-            self.J_PRE_PASS = getenv('J_PRE_PASS')
-            self.J_PRE_HOST = getenv('J_PRE_HOST')
-            self.J_PRE_PORT = getenv('J_PRE_PORT')
-            self.J_PRE_NAME = getenv('J_PRE_NAME')
+            self.F_REP_USER = getenv('BILLER_USER')
+            self.F_REP_PASS = getenv('BILLER_PASS')
+            self.F_REP_HOST = getenv('BILLER_HOST')
+            self.F_REP_PORT = getenv('BILLER_PORT')
+            self.F_REP_NAME = getenv('BILLER_NAME')
+            self.F_REP_SCHE = getenv('BILLER_SCHE')
+            self.J_PRE_USER = getenv('JANO_USER')
+            self.J_PRE_PASS = getenv('JANO_PASS')
+            self.J_PRE_HOST = getenv('JANO_HOST')
+            self.J_PRE_PORT = getenv('JANO_PORT')
+            self.J_PRE_NAME = getenv('JANO_NAME')
             logger.debug('Environment variables loaded')
 
             self.fact_engine = create_engine(

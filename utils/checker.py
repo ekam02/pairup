@@ -11,21 +11,31 @@ from config.logger_config import setup_logger
 logger = setup_logger(__name__, console_level=log_console_level, file_level=log_file_level)
 
 
+def get_database_type(engine: Engine) -> str:
+    """Obtiene el tipo de base de datos del engine."""
+    return engine.dialect.name
+
+
 def check_database_availability(engine: Engine) -> Optional[bool]:
     """Comprueba la disponibilidad de la base de datos."""
     try:
         # Intenta conectar y ejecutar una consulta simple
+        dialect = get_database_type(engine)
+        if dialect == "oracle":
+            clause = text("SELECT 1 FROM DUAL")
+        else:
+            clause = text("SELECT 1")
         with engine.connect() as connection:
             # Ejecuta una consulta básica que funciona en la mayoría de bases de datos
-            result = connection.execute(text("SELECT 1"))
+            result = connection.execute(clause)
             result.fetchone()
         return True
     except OperationalError:
-        logger.exception(f"Error al conectar con la base de datos")
+        logger.error(f"Error al conectar con la base de datos")
     except ProgrammingError:
-        logger.exception(f"Error al ejecutar la consulta")
+        logger.error(f"Error al ejecutar la consulta")
     except SQLAlchemyError:
-        logger.exception(f"Error al conectar con la base de datos")
+        logger.error(f"Error al conectar con la base de datos")
     except Exception as e:
         logger.error(f"Error inesperado al verificar la base de datos: {e}")
     return False

@@ -44,7 +44,7 @@ class AppSettings:
             self.END_DATE = cfg['DATETIME']['END_DATE']
 
             logger = setup_logger(__name__, console_level=self.log_console_level, file_level=self.log_file_level)
-            logger.info(f"Loading settings from {cfg_file}")
+            logger.info(f"Loading settings from {cfg_file.name}")
 
             biller_user = getenv('BILLER_USER')
             biller_pass = getenv('BILLER_PASS')

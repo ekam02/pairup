@@ -1,14 +1,20 @@
-from typing import Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta
 import re
+from typing import Tuple, Optional
 
-from sqlalchemy import create_engine
+from dateutil.parser import parse
+from sqlalchemy import Engine, TextClause
 import pandas as pd
+from pandas import DataFrame, read_sql, Series
 from pandas.errors import MergeError
 
-from config import biller_engine
-from models import PAIR_EDOC_FCT_SQL, PAIR_SPTD_FCT_SQL
+from config import biller_engine, jano_engine, log_console_level, log_file_level
+from config.logger_config import setup_logger
+from models import BILLER_FIND_DOC_BY_ATTRIBUTES, JANO_FIND_INVOICE_BY_ATTRIBUTES, JANO_FIND_MEMO_BY_ATTRIBUTES
+
+
+logger = setup_logger(__name__, console_level=log_console_level, file_level=log_file_level)
 
 
 def calculate_date_range(central_date: date, days: int = 4) -> tuple[str, str]:
@@ -108,23 +114,34 @@ def dtype_to_str(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def differential_matching(df1: pd.DataFrame, df2: pd.DataFrame, pivot: str = 'pair_up') -> Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]]:
+def differential_matching(
+        df1: DataFrame, df2: DataFrame, pivot: str = 'pair_up'
+) -> Optional[Tuple[DataFrame, DataFrame, DataFrame]]:
+    """Devuelve tres DataFrames: la intersección de df1 y df2, los elementos únicos de df1 y los elementos únicos de df2."""
     try:
+        if not isinstance(df1, DataFrame) or not isinstance(df2, DataFrame):
+            raise TypeError("Se espera que 'df1' y 'df2' sean de tipo 'DataFrame' de Pandas.")
+        if df1.empty or df2.empty:
+            raise ValueError("Se espera que 'df1' y 'df2' tengan contenido.")
+        if not isinstance(pivot, str):
+            raise TypeError("Se espera que 'pivot' sea de tipo 'str'.")
+        if pivot not in df1.columns or pivot not in df2.columns:
+            raise KeyError(f"La clave '{pivot}' no se encuentra en los DataFrames proporcionados.")
         inner_df = pd.merge(df1, df2, on=pivot, how='inner')  # df1 | df2
         df1 = df1[~df1[pivot].isin(inner_df[pivot])]          # df1 - inner_df
         df2 = df2[~df2[pivot].isin(inner_df[pivot])]          # df2 - inner_df
         return inner_df, df1, df2
-    except TypeError as e:
-        pass
-    except MergeError as e:
-        pass
-    except KeyError as e:
-        pass
+    except TypeError:
+        logger.exception(f"Los tipos proporcionados no son válidos.")
+    except MergeError:
+        logger.exception(f"Error al intentar realizar la unión de DataFrames.")
+    except KeyError:
+        logger.exception(f"Error al intentar acceder a la clave '{pivot}' en los DataFrames proporcionados.")
     except Exception as e:
-        pass
+        logger.error(f"Se ha producido un error inesperado mientras se procesaba la unión de DataFrames: {e}")
 
 
-def data_frame_slicer(main_df: pd.DataFrame):
+def data_frame_slicer(main_df: DataFrame) -> Optional[Tuple[DataFrame, DataFrame, DataFrame]]:
     left_df = main_df[main_df['id_fct'].isna()]
     left_df = left_df.drop(['id_fct', 'c_origen', 'prefijo_fct', 'consecutivo_fct', 'factura_fct', 'nro_factura_afec', 'line_fct', 'tienda_desc_fct', 'tienda_fct', 'caja_fct', 'trx_fct', 'fecha_fct', 'mes', 'valor_fct', 'cliente_fct', 'duplicada', 'f_envio_dian', 'estado_dian', 'log_errores_dian', 'cufe'], axis=1)
     main_df = main_df[~main_df['id_fct'].isna()]
@@ -150,92 +167,140 @@ def identifier(line: str, store: str, pos: str, trx: str, date: str):
     return line + store.zfill(4) + pos.zfill(4) + trx.zfill(5) + date.replace('-', '')
 
 
-def find_pair_fct_row(_row) -> dict:
-    _re = row_empty()
-    _re.update(_row.to_dict())
-
-    dates = calculate_date_range(datetime.strptime(_row['fecha_cierre'], '%Y-%m-%d'), 1)
-    _result = pd.read_sql(PAIR_EDOC_FCT_SQL.format_map({
-        'edoc': _row['factura_jan'],
-        'trx': _row['trx_jan'],
-        'start_date': dates[0],
-        'end_date': dates[1]
-    }), biller_engine)
-    if not _result.empty:
-        _re.update(_result.iloc[0].to_dict())
-    else:
-        # dates = calculate_date_range(datetime.strptime(_row['fecha_cierre'], '%Y-%m-%d'), 1)
-        _result = pd.read_sql(PAIR_SPTD_FCT_SQL.format_map({
-            'store': _row['tienda_jan'],
-            'pos': _row['caja_jan'].zfill(2),
-            'trx': _row['trx_jan'],
-            'start_date': dates[0],
-            'end_date': dates[1]
-        }), biller_engine)
-        if not _result.empty:
-            if _row['tipo_tr'] == 'F':
-                if not _result[(_result['c_origen'] == '5') & (_result['prefijo_fct'] == 'RASU')].empty:
-                    _re.update(_result[(_result['c_origen'] == '5') & (_result['prefijo_fct'] == 'RASU')].iloc[0].to_dict())
-                elif not _result[_result['c_origen'] == '13'].empty:
-                    _re.update(_result[_result['c_origen'] == '13'].iloc[0].to_dict())
-                else:
-                    _re.update(_result[_result['c_origen'] == '5'].iloc[0].to_dict())
+def find_biller_document_by_attributes(
+        s: Series, 
+        clause: TextClause = BILLER_FIND_DOC_BY_ATTRIBUTES,
+        engine: Engine = biller_engine
+) -> Optional[dict]:
+    """Devuelve un diccionario con datos encontrados en el Facturador."""
+    try:
+        if not isinstance(s, Series):
+            raise TypeError("Se espera que 's' sea de tipo 'Series' de Pandas.")
+        if s.empty:
+            raise ValueError("Se espera que 's' tenga contenido.")
+        if not isinstance(clause, TextClause):
+            raise TypeError("Se espera que 'clause' sea de tipo 'TextClause' de SQLAlchemy.")
+        if not isinstance(engine, Engine):
+            raise TypeError("Se espera que 'engine' sea de tipo 'Engine' de SQLAlchemy.")
+        billed_at = parse(s["fecha_cierre"])
+        started_at = parse(s["fecha_ini"])
+        finished_at = parse(s["fecha_fin"])
+        params = {
+            'doc_num': s["factura_jan"],
+            'store': int(s["tienda_jan"]),
+            'pos': int(s["caja_jan"]),
+            'trx': int(s["trx_jan"]),
+            'billed_at_i': billed_at - timedelta(days=1),
+            'billed_at_j': billed_at + timedelta(days=1),
+            'started_at_i': started_at - timedelta(days=1),
+            'started_at_j': started_at + timedelta(days=1),
+            'finished_at_i': finished_at - timedelta(days=1),
+            'finished_at_j': finished_at + timedelta(days=1),
+        }
+        partner = read_sql(clause, engine, params=params)
+        if not partner.empty:
+            if s["tipo_tr"] == 'F':
+                replaces = partner[partner['prefijo_fct'] == 'RASU']
+                if not replaces.empty:
+                    return replaces.iloc[0].to_dict()  # Devuelve el primer documento de remplazo
+                contingency = partner[partner['c_origen'] == '13']
+                if not contingency.empty:
+                    return contingency.iloc[0].to_dict()  # Devuelve el primer documento de contingencia
+                invoice = partner[partner['c_origen'] == '5']
+                if not invoice.empty:
+                    return invoice.iloc[0].to_dict()  # Devuelve el primer documento factura
             else:
-                _re.update(_result[_result['c_origen'] == '9'].iloc[0].to_dict())
-        else:
-            dates = calculate_date_range(datetime.strptime(_row['fecha_ini'], '%Y-%m-%d'), 1)
-            _result = pd.read_sql(PAIR_SPTD_FCT_SQL.format_map({
-                'store': _row['tienda_jan'],
-                'pos': _row['caja_jan'].zfill(2),
-                'trx': _row['trx_jan'],
-                'start_date': dates[0],
-                'end_date': dates[1]
-            }), biller_engine)
-            if not _result.empty:
-                if _row['tipo_tr'] == 'F':
-                    if not _result[(_result['c_origen'] == '5') & (_result['prefijo_fct'] == 'RASU')].empty:
-                        _re.update(_result[(_result['c_origen'] == '5') & (_result['prefijo_fct'] == 'RASU')].iloc[0].to_dict())
-                    elif not _result[_result['c_origen'] == '13'].empty:
-                        _re.update(_result[_result['c_origen'] == '13'].iloc[0].to_dict())
-                    else:
-                        _re.update(_result[_result['c_origen'] == '5'].iloc[0].to_dict())
-                else:
-                    _re.update(_result[_result['c_origen'] == '9'].iloc[0].to_dict())
-            else:
-                dates = calculate_date_range(datetime.strptime(_row['fecha_fin'], '%Y-%m-%d'), 1)
-                _result = pd.read_sql(PAIR_SPTD_FCT_SQL.format_map({
-                    'store': _row['tienda_jan'],
-                    'pos': _row['caja_jan'].zfill(2),
-                    'trx': _row['trx_jan'],
-                    'start_date': dates[0],
-                    'end_date': dates[1]
-                }), biller_engine)
-                if not _result.empty:
-                    if _row['tipo_tr'] == 'F':
-                        if not _result[(_result['c_origen'] == '5') & (_result['prefijo_fct'] == 'RASU')].empty:
-                            _re.update(_result[(_result['c_origen'] == '5') & (_result['prefijo_fct'] == 'RASU')].iloc[0].to_dict())
-                        elif not _result[_result['c_origen'] == '13'].empty:
-                            _re.update(_result[_result['c_origen'] == '13'].iloc[0].to_dict())
-                        else:
-                            _re.update(_result[_result['c_origen'] == '5'].iloc[0].to_dict())
-                    else:
-                        _re.update(_result[_result['c_origen'] == '9'].iloc[0].to_dict())
-
-    return _re
+                credit_memo = partner[partner['c_origen'] == '9']
+                if not credit_memo.empty:
+                    return credit_memo.iloc[0].to_dict()  # Devuelve la primera nota crédito
+                debit_memo = partner[partner['c_origen'] == '15']
+                if not debit_memo.empty:
+                    return debit_memo.iloc[0].to_dict()  # Devuelve la primera nota crédito
+    except TypeError:
+        logger.exception("Los tipos proporcionados no son válidos.")
+    except ValueError:
+        logger.exception("Los valores proporcionados no son válidos.")
+    except KeyError:
+        logger.exception("Error al buscar una palabra clave dentro del DataFrame de Pandas.")
+    except Exception as e:
+        logger.error(f"Se ha producido un error al buscar información sobre el Facturador: {e}")
+    return None
 
 
-def find_pair_jan_row(_row: pd.Series, query: str, engine: create_engine) -> dict:
-    _re = row_empty()
-    _re.update(_row.to_dict())
-    dates = calculate_date_range(datetime.strptime(_row['fecha_fct'], '%Y-%m-%d'), 1)
-    fct = pd.read_sql_query(query.format_map({
-        'store': _row['tienda_fct'],
-        'pos': _row['caja_fct'],
-        'trx': _row['trx_fct'],
-        'start_date': dates[0],
-        'end_date': dates[1]
-    }), engine)
-    if not fct.empty:
-        _re.update(fct.iloc[0].to_dict())
+def find_jano_document_by_attributes(
+        s: Series,
+        clause: TextClause = JANO_FIND_INVOICE_BY_ATTRIBUTES,
+        engine: Engine = jano_engine
+) -> Optional[dict]:
+    try:
+        if not isinstance(s, Series):
+            raise TypeError("Se espera que 's' sea de tipo 'Series' de Pandas.")
+        if s.empty:
+            raise ValueError("Se espera que 's' tenga contenido.")
+        if not isinstance(clause, TextClause):
+            raise TypeError("Se espera que 'clause' sea de tipo 'TextClause' de SQLAlchemy.")
+        if not isinstance(engine, Engine):
+            raise TypeError("Se espera que 'engine' sea de tipo 'Engine' de SQLAlchemy.")
+        match = row_empty()
+        match.update(s.to_dict())
+        billed_at = parse(s['fecha_fct'])
+        params = {
+            'store': int(s['tienda_fct']),
+            'pos': int(s['caja_fct']),
+            'trx': int(s['trx_fct']),
+            'start_date': billed_at - timedelta(days=1),
+            'end_date': billed_at + timedelta(days=1)
+        }
+        partner = read_sql(clause, engine, params=params)
+        if not partner.empty:
+            match.update(partner.iloc[0].to_dict())
 
-    return _re
+        return match
+    except TypeError:
+        logger.exception("Los tipos proporcionados no son válidos.")
+    except ValueError:
+        logger.exception("Los valores proporcionados no son válidos.")
+    except Exception as e:
+        logger.error(f"Se ha producido un error al buscar información sobre Jano: {e}")
+
+
+def find_biller_pair(df: DataFrame) -> Optional[DataFrame]:
+    """Crea una estructura de consultas en paralelo para hallar parejas de documentos disponibles en Jano"""
+    try:
+        if not isinstance(df, DataFrame):
+            raise TypeError("Se espera que 'df' sea de tipo 'DataFrame' de Pandas.")
+        if df.empty:
+            return df  # Devuelve el DataFrame vacío si no hay datos
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(find_biller_document_by_attributes, row) for _, row in df.iterrows()]
+            biller_pairs_df = pd.DataFrame([future.result() for future in as_completed(futures)])
+            if not biller_pairs_df.empty:
+                return biller_pairs_df
+    except TypeError:
+        logger.exception("Los tipos proporcionados no son válidos.")
+    except ValueError:
+        logger.exception("Los valores proporcionados no son válidos.")
+    except Exception as e:
+        logger.error(f"Se ha producido un error inesperado mientras se procesaba el DataFrame pasado por argumento: {e}")
+    return 
+
+
+def find_jano_pair(df: DataFrame) -> Optional[DataFrame]:
+    try:
+        if not isinstance(df, DataFrame):
+            raise TypeError("Se espera que 'df' sea de tipo 'DataFrame' de Pandas.")
+        if df.empty:
+            return df  # Devuelve el DataFrame vacío si no hay datos
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = []
+            for _, r in df.iterrows():
+                if str(r['c_origen']) in ('5', '8', '13'):
+                    futures.append(executor.submit(find_jano_document_by_attributes, r, JANO_FIND_INVOICE_BY_ATTRIBUTES))
+                elif str(r['c_origen']) in ('4', '9'):
+                    futures.append(executor.submit(find_jano_document_by_attributes, r, JANO_FIND_MEMO_BY_ATTRIBUTES))
+
+            jano_pairs_df = pd.DataFrame([future.result() for future in as_completed(futures)])
+        return jano_pairs_df
+    except Exception as e:
+        logger.error(f"Se ha producido un error inesperado mientras se procesaba el DataFrame pasado por argumento: {e}")
+    return None
